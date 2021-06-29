@@ -19,7 +19,7 @@ STOPPOS_JP = ["形容動詞語幹", "副詞可能", "代名詞", "ナイ形容�
 
 def measure_sents(text: str) -> np.ndarray:
     """Show descriptive stats of sentence length.
-    
+     
     input text should be one sentence per line.
     """
     # sents = DELIM_SENT.split(text)
@@ -280,14 +280,14 @@ def apply_file(fname, col, swpath=None, awdpath=None, jiwcpath=None):
             rows = [line.strip().split("\t") for line in f]
             awd = {word: score for word, score, _, _ in rows}
     else:
-        awd = []
+        awd = {}
 
     if jiwcpath:
         df_jiwc = pd.read_csv(jiwcpath, index_col=1).drop(
             columns="Unnamed: 0"
         )
     else:
-        df_jiwc = []
+        df_jiwc = pd.DataFrame()
 
     pd.concat(
         [df, df.apply(lambda row: apply_all(row[col], stopwords, awd, df_jiwc), result_type="expand", axis=1)],
