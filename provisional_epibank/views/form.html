@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="utf-8" />
+    <title>ABCエピソードバンクデモ画面</title>
+    <link rel="stylesheet" href="/static/css/ustyle.css" type="text/css"/>
+</head>
+
+<body>
+    <div id="header">
+        <img id="mainimg" src="/static/image/logo_abcd_eb.png"/>
+    </div>
+    
+    <div id="app">
+        <form v-on:submit.prevent="submit">
+            <input v-model="info.エピソード" placeholder="エピソードを入力">
+            <input type="submit" value="送信">
+        </form>
+            <hr>
+        <div v-if="visual">
+            <h1>JSON POST Response Results</h1>
+            <ul>
+                <samp v-for="(item,index) in results"> [[index]] : [[ item ]] </samp>
+            </ul>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="https://unpkg.com/vue"></script>
+    <script src="https://unpkg.com/jquery"></script>
+    <script src="/static/app.js"> </script>
+
+    <div id="footer">
+        <p>&copy; SOCIOCOM 2021</p>
+    </div>
+</body>
+
+</html>
