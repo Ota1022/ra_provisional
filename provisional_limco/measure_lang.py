@@ -5,24 +5,22 @@ from typing import List, Tuple, Dict, Union
 import unicodedata as ud
 
 import fire
-from natto import MeCab
 import pandas as pd
 import numpy as np
 
+import spacy
+NLP = spacy.load('ja_ginza')
+
 Num = Union[int, float]
-
-
-NM = MeCab()  # NOTE: assume IPADIC
-NMN = MeCab("-d /usr/local/lib/mecab/dic/mecab-ipadic-neologd")
 STOPPOS_JP = ["形容動詞語幹", "副詞可能", "代名詞", "ナイ形容詞語幹", "特殊", "数", "接尾", "非自立"]
 
 
+# テキストを構成する文の総数
+# 文章を構成する各文の文字数の記述統計
 def measure_sents(text: str) -> np.ndarray:
     """Show descriptive stats of sentence length.
-     
     input text should be one sentence per line.
     """
-    # sents = DELIM_SENT.split(text)
     if "\r" in text:
         sents = text.split("\r\n")
     else:
@@ -42,6 +40,7 @@ def measure_sents(text: str) -> np.ndarray:
     )
 
 
+#　テキストに含まれる会話文の総数の割合
 def count_conversations(text: str) -> float:
     # 会話文の割合
     text = re.sub(r"\s", " ", text)
@@ -52,6 +51,7 @@ def count_conversations(text: str) -> float:
     return np.divide(sum(lens_single) + sum(lens_double), len(text))
 
 
+# テキスト中の文字に対する、ひらがな、カタカナ、漢字のそれぞれの文字種の割合
 def count_charcat(text: str) -> np.ndarray:
     text = re.sub(r"\s", " ", text)
     c = Counter([ud.name(char).split()[0] for char in text])
@@ -59,20 +59,17 @@ def count_charcat(text: str) -> np.ndarray:
     return np.divide(counts, len(text))
 
 
+# ここでNM
 def measure_pos(text: str, stopwords) -> np.ndarray:
     tokens = [
         (n.surface, n.feature.split(","))
         for n in NM.parse(text, as_nodes=True)
         if not n.is_eos()
     ]
-    # print(tokens)
 
-    # VERB RELATED MEASURES
     verbs = [token for token in tokens if token[1][0] == "動詞"]
-    # TODO: 助動詞との連語も含める？
-    # lens_verb = [len(verb) for verb in verbs]
 
-    # CONTENT WORDS RATIO
+    # テキストの総単語数に対する内容語(名詞、動詞、形容詞、副詞)の割合
     nouns = [token for token in tokens if token[1][0] == "名詞"]
     adjcs = [token for token in tokens if token[1][0] == "形容詞"]
     content_words = verbs + nouns + adjcs
@@ -88,9 +85,7 @@ def measure_pos(text: str, stopwords) -> np.ndarray:
         len(tokens),
     )
 
-    # NOTE: skip FUNCTION WORDS RATIO since it's equiv to 1 - CWR
-
-    # Modifying words and verb ratio (MVR)
+    # 文章中の単語に対して、動詞と形容詞・副詞・接続詞の割合を表したもの
     advbs = [token for token in tokens if token[1][0] == "副詞"]
     padjs = [token for token in tokens if token[1][0] == "連体詞"]
     mvr = np.divide(len(adjcs + advbs + padjs), len(verbs))
@@ -99,7 +94,7 @@ def measure_pos(text: str, stopwords) -> np.ndarray:
     ners = [token for token in tokens if token[1][1] == "固有名詞"]
     nerr = np.divide(len(ners), len(tokens))
 
-    # TTR
+    # テキスト中の総単語数に対する異種単語の比率
     ttrs = calc_ttrs(tokens)
 
     return np.concatenate(
@@ -124,24 +119,25 @@ def measure_pos(text: str, stopwords) -> np.ndarray:
     )
 
 
+# ここでNMN
+# テキストに含まれる単語の抽象
 def measure_abst(text: str, awd) -> np.ndarray:
-    # AWD uses neologd
     tokens = [
         (n.surface, n.feature.split(","))
         for n in NMN.parse(text, as_nodes=True)
         if not n.is_eos()
     ]
-    # print(tokens)
+    
     scores = [
         float(awd.get(token[0] if token[1][6] == "*" else token[1][6], 0))
         for token in tokens
     ]
-    # print(scores)
 
     # top k=5 mean
     return np.array([np.mean(sorted(scores, reverse=True)[:5]), max(scores)])
 
 
+#ここでNM
 def detect_bunmatsu(text: str) -> float:
     if "\r" in text:
         sents = text.split("\r\n")
@@ -159,18 +155,16 @@ def detect_bunmatsu(text: str) -> float:
         taigen += 1 if tokens[-2][1] == "名詞" else 0
     ratio_taigen = np.divide(taigen, len(sents))
 
-    # TODO: what else?
-
     return ratio_taigen
 
 
+#　テキスト中の総単語数に対する異種単語の比率
 def calc_ttrs(tokens: List[Tuple[str, List[str]]]) -> np.ndarray:
     cnt = Counter([token[1][6] for token in tokens])
     Vn = len(cnt)
     logVn = np.log(Vn)
     N = np.sum(list(cnt.values()))
     logN = np.log(N)
-    # TODO: implement frequency-wise TTR variants
     return np.array(
         [
             np.divide(Vn, N),  # original plain TTR: not robust to the length
@@ -185,11 +179,13 @@ def calc_ttrs(tokens: List[Tuple[str, List[str]]]) -> np.ndarray:
     )
 
 
+# 荒牧先生の潜在語彙量
 def calc_potentialvocab(text: str) -> float:
-    # 荒牧先生の潜在語彙量も
     raise NotImplementedError
 
 
+# ここでNM
+# 7つの感情に関連する単語の、テキスト中の全単語に対する比率
 def calc_jiwc(text: str, df_jiwc) -> np.ndarray:
     tokens = [
         (n.surface, n.feature.split(","))
