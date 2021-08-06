@@ -1,26 +1,25 @@
 from collections import Counter
-import os
 import re
-from typing import List, Tuple, Dict, Union
+from typing import Dict, Union
 import unicodedata as ud
 
 import fire
 import pandas as pd
 import numpy as np
-
 import spacy
-NLP = spacy.load('ja_ginza')
+import ginza
 
 Num = Union[int, float]
 STOPPOS_JP = ["形容動詞語幹", "副詞可能", "代名詞", "ナイ形容詞語幹", "特殊", "数", "接尾", "非自立"]
+NLP = spacy.load("ja_ginza")
 
 
-# テキストを構成する文の総数
-# 文章を構成する各文の文字数の記述統計
 def measure_sents(text: str) -> np.ndarray:
     """Show descriptive stats of sentence length.
+
     input text should be one sentence per line.
     """
+    # sents = DELIM_SENT.split(text)
     if "\r" in text:
         sents = text.split("\r\n")
     else:
@@ -40,7 +39,6 @@ def measure_sents(text: str) -> np.ndarray:
     )
 
 
-#　テキストに含まれる会話文の総数の割合
 def count_conversations(text: str) -> float:
     # 会話文の割合
     text = re.sub(r"\s", " ", text)
@@ -51,7 +49,6 @@ def count_conversations(text: str) -> float:
     return np.divide(sum(lens_single) + sum(lens_double), len(text))
 
 
-# テキスト中の文字に対する、ひらがな、カタカナ、漢字のそれぞれの文字種の割合
 def count_charcat(text: str) -> np.ndarray:
     text = re.sub(r"\s", " ", text)
     c = Counter([ud.name(char).split()[0] for char in text])
@@ -59,17 +56,25 @@ def count_charcat(text: str) -> np.ndarray:
     return np.divide(counts, len(text))
 
 
-# ここでNM
 def measure_pos(text: str, stopwords) -> np.ndarray:
-    tokens = [
-        (n.surface, n.feature.split(","))
-        for n in NM.parse(text, as_nodes=True)
-        if not n.is_eos()
-    ]
+    doc = NLP(text.replace("一\n\n　", ""))
+    tokens = []
+    for sent in doc.sents:
+        for token in sent:
+            token_tag = re.split("[,-]", token.tag_)  # 品詞詳細
+            token_infl = re.split("[,-]", ginza.inflection(token))  # 活用情報
+            analysis = token_tag + token_infl
+            analysis.append(token.lemma_)  # 基本形
+            tuple_ = (token.lemma_, analysis)
+            tokens.append(tuple_)
+    # print(tokens)
 
+    # VERB RELATED MEASURES
     verbs = [token for token in tokens if token[1][0] == "動詞"]
+    # TODO: 助動詞との連語も含める？
+    # lens_verb = [len(verb) for verb in verbs]
 
-    # テキストの総単語数に対する内容語(名詞、動詞、形容詞、副詞)の割合
+    # CONTENT WORDS RATIO
     nouns = [token for token in tokens if token[1][0] == "名詞"]
     adjcs = [token for token in tokens if token[1][0] == "形容詞"]
     content_words = verbs + nouns + adjcs
@@ -85,7 +90,9 @@ def measure_pos(text: str, stopwords) -> np.ndarray:
         len(tokens),
     )
 
-    # 文章中の単語に対して、動詞と形容詞・副詞・接続詞の割合を表したもの
+    # NOTE: skip FUNCTION WORDS RATIO since it's equiv to 1 - CWR
+
+    # Modifying words and verb ratio (MVR)
     advbs = [token for token in tokens if token[1][0] == "副詞"]
     padjs = [token for token in tokens if token[1][0] == "連体詞"]
     mvr = np.divide(len(adjcs + advbs + padjs), len(verbs))
@@ -94,7 +101,7 @@ def measure_pos(text: str, stopwords) -> np.ndarray:
     ners = [token for token in tokens if token[1][1] == "固有名詞"]
     nerr = np.divide(len(ners), len(tokens))
 
-    # テキスト中の総単語数に対する異種単語の比率
+    # TTR
     ttrs = calc_ttrs(tokens)
 
     return np.concatenate(
@@ -119,52 +126,42 @@ def measure_pos(text: str, stopwords) -> np.ndarray:
     )
 
 
-# ここでNMN
-# テキストに含まれる単語の抽象
 def measure_abst(text: str, awd) -> np.ndarray:
-    tokens = [
-        (n.surface, n.feature.split(","))
-        for n in NMN.parse(text, as_nodes=True)
-        if not n.is_eos()
-    ]
-    
-    scores = [
-        float(awd.get(token[0] if token[1][6] == "*" else token[1][6], 0))
-        for token in tokens
-    ]
+    doc = NLP(text.replace("一\n\n　", ""))
+    tokens = [token.lemma_ for sent in doc.sents for token in sent]
+    # print(tokens)
+    scores = [float(awd.get(token, 0)) for token in tokens]
+    # print(scores)
 
     # top k=5 mean
     return np.array([np.mean(sorted(scores, reverse=True)[:5]), max(scores)])
 
 
-#ここでNM
 def detect_bunmatsu(text: str) -> float:
-    if "\r" in text:
-        sents = text.split("\r\n")
-    else:
-        sents = text.split("\n")
-
+    doc = NLP(text.replace("一\n\n　", ""))
     # 体言止め
     taigen = 0
-    for sent in sents:
-        tokens = [
-            (n.surface, n.feature.split(","))
-            for n in NM.parse(text, as_nodes=True)
-            if not n.is_eos()
-        ]
-        taigen += 1 if tokens[-2][1] == "名詞" else 0
-    ratio_taigen = np.divide(taigen, len(sents))
+    for sent in doc.sents:
+        tokens = []
+        for token in sent:
+            token_tag = re.split("[,-]", token.tag_)
+            tokens.append(token_tag)
+        taigen += 1 if tokens[-2][0] == "名詞" else 0
+    ratio_taigen = np.divide(taigen, len([doc.sents]))
+
+    # TODO: what else?
 
     return ratio_taigen
 
 
-#　テキスト中の総単語数に対する異種単語の比率
-def calc_ttrs(tokens: List[Tuple[str, List[str]]]) -> np.ndarray:
-    cnt = Counter([token[1][6] for token in tokens])
+def calc_ttrs(text: str) -> np.ndarray:
+    doc = NLP(text.replace("一\n\n　", ""))
+    cnt = Counter([token.lemma_ for sent in doc.sents for token in sent])
     Vn = len(cnt)
     logVn = np.log(Vn)
     N = np.sum(list(cnt.values()))
     logN = np.log(N)
+    # TODO: implement frequency-wise TTR variants
     return np.array(
         [
             np.divide(Vn, N),  # original plain TTR: not robust to the length
@@ -179,22 +176,15 @@ def calc_ttrs(tokens: List[Tuple[str, List[str]]]) -> np.ndarray:
     )
 
 
-# 荒牧先生の潜在語彙量
 def calc_potentialvocab(text: str) -> float:
+    # 荒牧先生の潜在語彙量も
     raise NotImplementedError
 
 
-# ここでNM
-# 7つの感情に関連する単語の、テキスト中の全単語に対する比率
 def calc_jiwc(text: str, df_jiwc) -> np.ndarray:
-    tokens = [
-        (n.surface, n.feature.split(","))
-        for n in NM.parse(text, as_nodes=True)
-        if not n.is_eos()
-    ]
-    jiwc_words = set(
-        [token[0] if token[1][6] == "*" else token[1][6] for token in tokens]
-    ) & set(df_jiwc.index)
+    doc = NLP(text.replace("一\n\n　", ""))
+    tokens = [token.lemma_ for sent in doc.sents for token in sent]
+    jiwc_words = set([token for token in tokens]) & set(df_jiwc.index)
     jiwc_vals = df_jiwc.loc[jiwc_words].sum()
     return np.divide(jiwc_vals, jiwc_vals.sum())
     # Sad Anx Anger Hate Trustful S Happy
@@ -213,7 +203,7 @@ def apply_all(text: str, stopwords, awd, df_jiwc) -> Dict[str, Num]:
                 calc_jiwc(text, df_jiwc),
             )
         )
-    except:
+    except ValueError:
         print(text)
         raise
     headers = [
@@ -279,14 +269,19 @@ def apply_file(fname, col, swpath=None, awdpath=None, jiwcpath=None):
         awd = {}
 
     if jiwcpath:
-        df_jiwc = pd.read_csv(jiwcpath, index_col=1).drop(
-            columns="Unnamed: 0"
-        )
+        df_jiwc = pd.read_csv(jiwcpath, index_col=1).drop(columns="Unnamed: 0")
     else:
         df_jiwc = pd.DataFrame()
 
     pd.concat(
-        [df, df.apply(lambda row: apply_all(row[col], stopwords, awd, df_jiwc), result_type="expand", axis=1)],
+        [
+            df,
+            df.apply(
+                lambda row: apply_all(row[col], stopwords, awd, df_jiwc),
+                result_type="expand",
+                axis=1,
+            ),
+        ],
         axis=1,
     ).to_csv(f"{fname}.measured.csv", index=False)
 
