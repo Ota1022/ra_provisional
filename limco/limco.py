@@ -286,5 +286,9 @@ def apply_file(fname, col, swpath=None, awdpath=None, jiwcpath=None):
     ).to_csv(f"{fname}.measured.csv", index=False)
 
 
-if __name__ == "__main__":
+def main():
     fire.Fire(apply_file)
+
+
+if __name__ == "__main__":
+    main()

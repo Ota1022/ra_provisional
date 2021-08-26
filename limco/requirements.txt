@@ -1,0 +1,5 @@
+fire
+pandas
+numpy
+spacy
+ginza
