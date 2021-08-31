@@ -1,3 +1,3 @@
 # ra_provisional
 
-recording my test code of research assistant jobs
+Recording non-prohibited test codes of research assistant jobs
