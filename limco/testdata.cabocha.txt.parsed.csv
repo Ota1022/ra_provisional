@@ -1,0 +1,2 @@
+sdep_count,sdep_mean,sdep_std,sdep_min,sdep_25%,sdep_50%,sdep_75%,sdep_max,nleaf_count,nleaf_mean,nleaf_std,nleaf_min,nleaf_25%,nleaf_50%,nleaf_75%,nleaf_max,chklen_count,chklen_mean,chklen_std,chklen_min,chklen_25%,chklen_50%,chklen_75%,chklen_max
+3.0,4.666666666666667,2.0816659994661326,3.0,3.5,4.0,5.5,7.0,3.0,9.0,3.605551275463989,6.0,7.0,8.0,10.5,13.0,27.0,2.3333333333333335,0.8770580193070291,1.0,2.0,2.0,3.0,4.0
