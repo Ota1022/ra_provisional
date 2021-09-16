@@ -11,7 +11,7 @@ import ginza
 
 Num = Union[int, float]
 STOPPOS_JP = ["形容動詞語幹", "副詞可能", "代名詞", "ナイ形容詞語幹", "特殊", "数", "接尾", "非自立"]
-NLP = spacy.load("ja_ginza")
+NLP = spacy.load("ja_ginza")  # 統計モデルをロード
 
 
 def measure_sents(text: str) -> np.ndarray:
@@ -57,7 +57,7 @@ def count_charcat(text: str) -> np.ndarray:
 
 
 def measure_pos(text: str, stopwords) -> np.ndarray:
-    doc = NLP(text.replace("一\n\n　", ""))
+    doc = NLP(text.replace("一\n\n　", ""))  # 言語アノテーションの予測
     tokens = []
     for sent in doc.sents:
         for token in sent:
